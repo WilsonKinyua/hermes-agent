@@ -61,28 +61,48 @@ const APP_VIEW_BY_PATH = new Map<string, AppView>(APP_ROUTES.map(route => [route
 const RESERVED_PATHS: ReadonlySet<string> = new Set(APP_ROUTES.map(route => route.path))
 
 // ── Contributed routes — the `routes` registry area ─────────────────────────
-// A data contribution mounts a full page in the workspace pane at `path`.
-// Contributed paths are reserved exactly like APP_ROUTES so the session-id
-// parser never mistakes them for a session route.
+// A contribution mounts a FULL PAGE in the workspace pane at `data.path`
+// (`render` on the contribution itself, like every other area). Contributed
+// paths are reserved exactly like APP_ROUTES so the session-id parser never
+// mistakes them for a session route. Navigate with `host.navigate(path)`.
 
 export const ROUTES_AREA = 'routes'
 
-/** Payload of a `routes` data contribution. */
+/** Payload of a `routes` contribution's `data`. */
 export interface RouteContribution {
   /** Absolute path, e.g. `/kanban`. One segment; no params. */
   path: string
-  render: () => ReactNode
 }
 
-export function contributedRoutes(): Array<RouteContribution & { key: string }> {
+export function contributedRoutes(): Array<{ key: string; path: string; render: () => ReactNode }> {
   return registry
     .getArea(ROUTES_AREA)
-    .map(c => ({ key: `${c.source ?? 'core'}:${c.id}`, ...(c.data as RouteContribution) }))
-    .filter(route => Boolean(route.path?.startsWith('/') && route.render) && !RESERVED_PATHS.has(route.path))
+    .map(c => ({
+      key: `${c.source ?? 'core'}:${c.id}`,
+      path: (c.data as RouteContribution | undefined)?.path ?? '',
+      render: c.render!
+    }))
+    .filter(route => Boolean(route.path.startsWith('/') && route.render) && !RESERVED_PATHS.has(route.path))
 }
 
 function isContributedPath(pathname: string): boolean {
-  return registry.getArea(ROUTES_AREA).some(c => (c.data as RouteContribution | undefined)?.path === pathname)
+  return contributedRoutes().some(route => route.path === pathname)
+}
+
+// ── Contributed sidebar nav — the `sidebar.nav` registry area ────────────────
+// A DATA contribution adds a row to the sidebar's top nav (below Artifacts).
+// Pair with a ROUTES_AREA page: the row navigates to `path` and lights up
+// while the app is there.
+
+export const SIDEBAR_NAV_AREA = 'sidebar.nav'
+
+/** Payload of a `sidebar.nav` data contribution. */
+export interface SidebarNavContribution {
+  /** Codicon name, e.g. `'project'`. */
+  codicon: string
+  label: string
+  /** Route to navigate to (usually a contributed page's path). */
+  path: string
 }
 
 // Views that render as a full-screen modal card (OverlayView) over the shell.
